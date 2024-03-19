@@ -1,31 +1,14 @@
-[![Build Status](https://travis-ci.org/microservices-demo/microservices-demo.svg?branch=master)](https://travis-ci.org/microservices-demo/microservices-demo)
+# deploy-to-eks-using-github-actions
+1. Create an EKS Cluster using this command:
 
-# DEPRECATED: Sock Shop : A Microservice Demo Application
+eksctl create cluster --name micro-dev-eks-demo --region eu-west-2 --nodegroup-name linux-nodes --node-type t2.medium --nodes 2
 
-The application is the user-facing part of an online shop that sells socks. It is intended to aid the demonstration and testing of microservice and cloud native technologies.
+2. Then create .github folder and then create workflow folder inside .github folder 
+3. create file with .yml extension and write the workflow code
+4. Create a github repository 
+5. Create secrets in github repo
+        Go to settings of repo
+        click on secrets and variables
+6. Test application by getting the dns name and going to a web browser 
 
-It is built using [Spring Boot](http://projects.spring.io/spring-boot/), [Go kit](http://gokit.io) and [Node.js](https://nodejs.org/) and is packaged in Docker containers.
-
-You can read more about the [application design](./internal-docs/design.md).
-
-## Deployment Platforms
-
-The [deploy folder](./deploy/) contains scripts and instructions to provision the application onto your favourite platform. 
-
-Please let us know if there is a platform that you would like to see supported.
-
-## Bugs, Feature Requests and Contributing
-
-We'd love to see community contributions. We like to keep it simple and use Github issues to track bugs and feature requests and pull requests to manage contributions. See the [contribution information](.github/CONTRIBUTING.md) for more information.
-
-## Screenshot
-
-![Sock Shop frontend](https://github.com/microservices-demo/microservices-demo.github.io/raw/master/assets/sockshop-frontend.png)
-
-## Visualizing the application
-
-Use [Weave Scope](http://weave.works/products/weave-scope/) or [Weave Cloud](http://cloud.weave.works/) to visualize the application once it's running in the selected [target platform](./deploy/).
-
-![Sock Shop in Weave Scope](https://github.com/microservices-demo/microservices-demo.github.io/raw/master/assets/sockshop-scope.png)
-
-## 
+Clean up: Run: eksctl delete cluster --name micro-dev-eks-demo

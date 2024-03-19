@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: micro-dev-eks-demo
+  labels:
+    app: micro-dev-eks-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: micro-dev-eks-demo
+  template:
+    metadata:
+      labels:
+        app: micro-dev-eks-demo
+    spec:
+      containers:
+        - name: micro-dev-eks-demo
+          image: 274127640471.dkr.ecr.us-east-2.amazonaws.com/micro-dev-eks-demo:1.1
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080

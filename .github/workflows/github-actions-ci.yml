@@ -1,0 +1,57 @@
+name: Socks Shop CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main  # Run for main branch
+  pull_request:
+    branches:
+      - main  # Run for pull requests targeting main branch
+  workflow_dispatch:  # Allow manual triggering of workflow
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v1
+        with:
+          terraform_version: 1.0.0
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v1
+        with:
+          version: 'latest'
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: 'your-aws-region'
+
+      - name: Deploy EKS Cluster
+        run: |
+          cd eks-cluster
+          terraform init
+          terraform apply -auto-approve
+
+      - name: Deploy Socks Shop Application
+        run: |
+          cd Kubernetes
+          # Replace this command with the actual deployment command for Socks Shop application
+          echo "Deploying Socks Shop Application"
+
+      - name: Test Application
+        run: |
+          kubectl get svc -n sock-shop
+          kubectl get svc -n prometheus
+
+      - name: Destroy Infrastructure
+        if: github.event_name == 'delete'
+        run: |
+          cd eks-cluster
+          terraform destroy -auto-approve
