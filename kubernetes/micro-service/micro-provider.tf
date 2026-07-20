@@ -22,8 +22,4 @@ provider "kubernetes" {
   token                  = data.aws_eks_cluster_auth.micro-dev-eks-demo.token
 }
 
-resource "kubernetes_namespace" "kube-namespace" {
-  metadata {
-    name = "sock-shop"
-  }
-}
+
