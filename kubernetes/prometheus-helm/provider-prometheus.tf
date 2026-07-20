@@ -18,7 +18,7 @@ terraform {
 }
 
 
-ddata "aws_eks_cluster_auth" "micro-dev-eks-demo_auth" {
+data "aws_eks_cluster_auth" "micro-dev-eks-demo_auth" {
   name = "micro-dev-eks-demo"
 }
 

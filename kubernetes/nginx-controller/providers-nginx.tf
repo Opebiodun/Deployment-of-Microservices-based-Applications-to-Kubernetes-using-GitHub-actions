@@ -23,6 +23,7 @@ data "aws_eks_cluster_auth" "micro-dev-eks-demo_auth" {
 }
 
 
+
 provider "aws" {
   region     = "eu-west-2"
 }

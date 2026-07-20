@@ -86,5 +86,3 @@ jobs:
         run: |
           kubectl get svc -n sock-shop
           kubectl get svc -n prometheus
-
-          
