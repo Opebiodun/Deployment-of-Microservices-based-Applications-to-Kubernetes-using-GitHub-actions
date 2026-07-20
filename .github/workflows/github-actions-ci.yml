@@ -3,55 +3,88 @@ name: Socks Shop CI/CD Pipeline
 on:
   push:
     branches:
-      - main  # Run for main branch
+      - main
   pull_request:
     branches:
-      - main  # Run for pull requests targeting main branch
-  workflow_dispatch:  # Allow manual triggering of workflow
+      - main
+  workflow_dispatch:
+
+env:
+  AWS_REGION: eu-west-2
+  CLUSTER_NAME: micro-dev-eks-demo
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v2
-
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v1
-        with:
-          terraform_version: 1.0.0
-
-      - name: Install kubectl
-        uses: azure/setup-kubectl@v1
-        with:
-          version: 'latest'
+        uses: actions/checkout@v4
 
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v1
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: 'your-aws-region'
+          aws-region: ${{ env.AWS_REGION }}
 
-      - name: Deploy EKS Cluster
+      - name: Install eksctl
         run: |
-          cd eks-cluster
+          curl --silent --location "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_Linux_amd64.tar.gz" | tar xz -C /tmp
+          sudo mv /tmp/eksctl /usr/local/bin
+
+      - name: Ensure EKS cluster exists
+        run: |
+          if ! aws eks describe-cluster --name $CLUSTER_NAME --region $AWS_REGION >/dev/null 2>&1; then
+            eksctl create cluster \
+              --name $CLUSTER_NAME \
+              --region $AWS_REGION \
+              --nodegroup-name micro-dev-eks-ng-public \
+              --node-type t2.medium \
+              --nodes 2
+          else
+            echo "Cluster $CLUSTER_NAME already exists, skipping creation"
+          fi
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name $CLUSTER_NAME --region $AWS_REGION
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'latest'
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.7.5
+
+      - name: Deploy core microservices
+        working-directory: kubernetes/micro-service
+        run: |
           terraform init
           terraform apply -auto-approve
 
-      - name: Deploy Socks Shop Application
+      - name: Deploy nginx ingress controller
+        working-directory: kubernetes/nginx-controller
         run: |
-          cd Kubernetes
-          # Replace this command with the actual deployment command for Socks Shop application
-          echo "Deploying Socks Shop Application"
+          terraform init
+          terraform apply -auto-approve
 
-      - name: Test Application
+      - name: Deploy Prometheus monitoring stack
+        working-directory: kubernetes/prometheus-helm
+        run: |
+          terraform init
+          terraform apply -auto-approve
+
+      - name: Deploy ingress rules
+        working-directory: kubernetes/ingress-rule
+        run: |
+          terraform init
+          terraform apply -auto-approve
+
+      - name: Verify deployment
         run: |
           kubectl get svc -n sock-shop
           kubectl get svc -n prometheus
 
-      - name: Destroy Infrastructure
-        if: github.event_name == 'delete'
-        run: |
-          cd eks-cluster
-          terraform destroy -auto-approve
+          

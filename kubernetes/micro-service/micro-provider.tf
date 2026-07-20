@@ -7,12 +7,10 @@ terraform {
   }
 }
 
-data "aws_eks_cluster" "micro-dev-eks-demo" {
+data "aws_eks_cluster_auth" "micro-dev-eks-demo_auth" {
   name = "micro-dev-eks-demo"
 }
-data "aws_eks_cluster_auth" "micro-dev-eks-demo_auth" {
-  name = "micro-dev-eks-demo_auth"
-}
+
 provider "kubernetes" {
   host                   = data.aws_eks_cluster.micro-dev-eks-demo.endpoint
   cluster_ca_certificate = base64decode(data.aws_eks_cluster.micro-dev-eks-demo.certificate_authority[0].data)
