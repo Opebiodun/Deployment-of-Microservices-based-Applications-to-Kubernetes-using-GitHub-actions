@@ -1,6 +1,6 @@
 terraform {
-  required_providers {
-    helm = {
+  provider "helm" {
+  kubernetes {
       source  = "hashicorp/helm"
       version = ">= 2.0.0"
     }
@@ -18,10 +18,13 @@ terraform {
 }
 
 
-data "aws_eks_cluster_auth" "micro-dev-eks-demo_auth" {
+data "aws_eks_cluster" "micro-dev-eks-demo" {
   name = "micro-dev-eks-demo"
 }
 
+data "aws_eks_cluster_auth" "micro-dev-eks-demo" {
+  name = "micro-dev-eks-demo"
+}
 
 
 provider "aws" {
@@ -29,31 +32,12 @@ provider "aws" {
 }
 
 provider "helm" {
-    kubernetes {
-       #host                   = data.aws_eks_cluster.micro-dev-eks-demo.endpoint
-      # cluster_ca_certificate = base64decode(data.aws_eks_cluster.micro-dev-eks-demo.certificate_authority[0].data)
-       #token                  = data.aws_eks_cluster_auth.micro-dev-eks-demo_auth.token
-       config_path = "~/.kube/config"
-    }
+  kubernetes = {
+    host                   = data.aws_eks_cluster.micro-dev-eks-demo.endpoint
+    cluster_ca_certificate = base64decode(data.aws_eks_cluster.micro-dev-eks-demo.certificate_authority[0].data)
+    token                  = data.aws_eks_cluster_auth.micro-dev-eks-demo.token
+  }
 }
-
-provider "kubernetes" {
-  #host                   = data.aws_eks_cluster.micro-dev-eks-demo.endpoint
- # cluster_ca_certificate = base64decode(data.aws_eks_cluster.micro-dev-eks-demo.certificate_authority[0].data)
-  #token                  = data.aws_eks_cluster_auth.micro-dev-eks-demo_auth.token
- #  version          = "2.16.1"
-  config_path = "~/.kube/config"
-}
-
-provider "kubectl" {
-   load_config_file = false
-   host                   = data.aws_eks_cluster.micro-dev-eks-demo.endpoint
-   cluster_ca_certificate = base64decode(data.aws_eks_cluster.micro-dev-eks-demo.certificate_authority[0].data)
-   token                  = data.aws_eks_cluster_auth.micro-dev-eks-demo_auth.token
-   config_path = "~/.kube/config"
-}
-
-
 #export the kubeconfig file
 
 #export KUBECONFIG=~/.kube/config
