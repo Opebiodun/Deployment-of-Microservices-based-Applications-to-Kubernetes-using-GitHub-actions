@@ -1,22 +1,11 @@
 terraform {
-  provider "helm" {
-  kubernetes {
+  required_providers {
+    helm = {
       source  = "hashicorp/helm"
-      version = ">= 2.0.0"
-    }
-
-    kubernetes = {
-        version = ">= 2.0.0"
-        source = "hashicorp/kubernetes"
-    }
-
-    kubectl = {
-      source = "gavinbunney/kubectl"
-      version = "1.14.0"
+      version = "~> 3.0"
     }
   }
 }
-
 
 data "aws_eks_cluster" "micro-dev-eks-demo" {
   name = "micro-dev-eks-demo"
