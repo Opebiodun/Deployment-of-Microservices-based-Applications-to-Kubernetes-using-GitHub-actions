@@ -34,7 +34,8 @@ provider "helm" {
 }
 
 provider "aws" {
-  region     = "eu-west-2"
+  region=$AWS_REGION
+  input=false
 }
 
 #export the kubeconfig file

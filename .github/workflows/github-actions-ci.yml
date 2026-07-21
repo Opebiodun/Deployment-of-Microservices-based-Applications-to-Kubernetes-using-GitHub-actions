@@ -20,12 +20,12 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v6
 
-      - name: Configure AWS Credentials
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
         with:
+          aws-region: eu-west-2
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
 
       - name: Install eksctl
         run: |
@@ -86,3 +86,29 @@ jobs:
         run: |
           kubectl get svc -n sock-shop
           kubectl get svc -n prometheus
+
+          
+      - name: Ensure Terraform state bucket exists
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          BUCKET="sockshop-tfstate-$ACCOUNT_ID"
+          echo "TF_STATE_BUCKET=$BUCKET" >> $GITHUB_ENV
+          if ! aws s3api head-bucket --bucket "$BUCKET" 2>/dev/null; then
+            aws s3api create-bucket \
+              --bucket "$BUCKET" \
+              --region $AWS_REGION \
+              --create-bucket-configuration LocationConstraint=$AWS_REGION
+            aws s3api put-bucket-versioning \
+              --bucket "$BUCKET" \
+              --versioning-configuration Status=Enabled
+          fi
+
+      - name: Deploy core microservices
+        working-directory: kubernetes/micro-service
+        run: |
+          terraform init \
+            -input=false \
+            -backend-config="bucket=$TF_STATE_BUCKET" \
+            -backend-config="key=micro-service/terraform.tfstate" \
+            -backend-config="region=$AWS_REGION"
+          terraform apply -input=false -auto-approve
