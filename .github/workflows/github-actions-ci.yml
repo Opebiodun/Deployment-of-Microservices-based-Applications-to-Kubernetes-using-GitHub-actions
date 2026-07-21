@@ -78,6 +78,9 @@ jobs:
         with:
           version: 'latest'
 
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
         with:
@@ -98,6 +101,50 @@ jobs:
             fi
           fi
 
+          NAMESPACE="sock-shop"
+          RESOURCES=(
+            "kubernetes_deployment|kube-carts-deployment|carts"
+            "kubernetes_service|kube-carts-service|carts"
+            "kubernetes_deployment|kube-carts-db-deployment|carts-db"
+            "kubernetes_service|kube-carts-db-service|carts-db"
+            "kubernetes_deployment|kube-catalogue-deployment|catalogue"
+            "kubernetes_service|kube-catalogue-service|catalogue"
+            "kubernetes_deployment|kube-catalogue-db-deployment|catalogue-db"
+            "kubernetes_service|kube-catalogue-db-service|catalogue-db"
+            "kubernetes_deployment|kube-front-end-deployment|front-end"
+            "kubernetes_service|kube-front-end-service|front-end"
+            "kubernetes_deployment|kube-orders-deployment|orders"
+            "kubernetes_service|kube-orders-service|orders"
+            "kubernetes_deployment|kube-orders-db-deployment|orders-db"
+            "kubernetes_service|kube-orders-db-service|orders-db"
+            "kubernetes_deployment|kube-payment-deployment|payment"
+            "kubernetes_service|kube-payment-service|payment"
+            "kubernetes_deployment|kube-queue-master-deployment|queue-master"
+            "kubernetes_service|kube-queue-master-service|queue-master"
+            "kubernetes_deployment|kube-rabbitmq-deployment|rabbitmq"
+            "kubernetes_service|kube-rabbitmq-service|rabbitmq"
+            "kubernetes_deployment|kube-session-db-deployment|session-db"
+            "kubernetes_service|kube-session-db-service|cartsession-dbs"
+            "kubernetes_deployment|kube-shipping-deployment|shipping"
+            "kubernetes_service|kube-shipping-service|shipping"
+            "kubernetes_deployment|kube-user-deployment|user"
+            "kubernetes_service|kube-user-service|user"
+            "kubernetes_deployment|kube-user-db-deployment|user-db"
+            "kubernetes_service|kube-user-db-service|user-db"
+          )
+
+          for entry in "${RESOURCES[@]}"; do
+            IFS='|' read -r type local_name k8s_name <<< "$entry"
+            kube_kind="${type#kubernetes_}"
+            address="$type.$local_name"
+            if ! terraform state list 2>/dev/null | grep -qx "$address"; then
+              if kubectl get "$kube_kind" "$k8s_name" -n "$NAMESPACE" >/dev/null 2>&1; then
+                echo "Importing $address as $NAMESPACE/$k8s_name"
+                terraform import "$address" "$NAMESPACE/$k8s_name"
+              fi
+            fi
+          done
+
           terraform apply -input=false -auto-approve
 
       - name: Deploy nginx ingress controller
@@ -112,6 +159,13 @@ jobs:
             if kubectl get namespace nginx-ingress >/dev/null 2>&1; then
               echo "Namespace nginx-ingress already exists but isn't in state — importing"
               terraform import kubernetes_namespace.nginx-namespace nginx-ingress
+            fi
+          fi
+
+          if ! terraform state list 2>/dev/null | grep -qx 'helm_release.ingress_nginx'; then
+            if helm status ingress-nginx -n nginx-ingress >/dev/null 2>&1; then
+              echo "Helm release ingress-nginx already exists but isn't in state — importing"
+              terraform import helm_release.ingress_nginx nginx-ingress/ingress-nginx
             fi
           fi
 
@@ -132,6 +186,13 @@ jobs:
             fi
           fi
 
+          if ! terraform state list 2>/dev/null | grep -qx 'helm_release.prometheus'; then
+            if helm status prometheus -n prometheus >/dev/null 2>&1; then
+              echo "Helm release prometheus already exists but isn't in state — importing"
+              terraform import helm_release.prometheus prometheus/prometheus
+            fi
+          fi
+
           terraform apply -input=false -auto-approve
 
       - name: Deploy ingress rules
@@ -141,6 +202,21 @@ jobs:
             -backend-config="bucket=$TF_STATE_BUCKET" \
             -backend-config="key=ingress-rule/terraform.tfstate" \
             -backend-config="region=$AWS_REGION"
+
+          if ! terraform state list 2>/dev/null | grep -qx 'kubernetes_ingress_v1.micro-ingress'; then
+            if kubectl get ingress sock-shop -n sock-shop >/dev/null 2>&1; then
+              echo "Ingress sock-shop already exists but isn't in state — importing"
+              terraform import kubernetes_ingress_v1.micro-ingress sock-shop/sock-shop
+            fi
+          fi
+
+          if ! terraform state list 2>/dev/null | grep -qx 'kubernetes_ingress_v1.prome-ingress'; then
+            if kubectl get ingress promethues-grafana -n prometheus >/dev/null 2>&1; then
+              echo "Ingress promethues-grafana already exists but isn't in state — importing"
+              terraform import kubernetes_ingress_v1.prome-ingress prometheus/promethues-grafana
+            fi
+          fi
+
           terraform apply -input=false -auto-approve
 
       - name: Verify deployment

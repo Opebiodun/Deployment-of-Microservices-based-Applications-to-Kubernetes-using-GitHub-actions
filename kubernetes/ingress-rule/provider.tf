@@ -57,3 +57,4 @@ provider "kubectl" {
    token                  = data.aws_eks_cluster_auth.micro-dev-eks-demo_auth.token
    config_path = "~/.kube/config"
 }
+
