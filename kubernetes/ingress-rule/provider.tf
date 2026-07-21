@@ -4,11 +4,11 @@ terraform {
   required_providers {
     helm = {
       source  = "hashicorp/helm"
-      version = ">= 2.0.0"
+      version = ">= 2.0.0, < 3.0.0"
     }
 
     kubernetes = {
-        version = ">= 2.0.0"
+        version = ">= 2.0.0, < 3.0.0"
         source = "hashicorp/kubernetes"
     }
 
@@ -57,4 +57,3 @@ provider "kubectl" {
    token                  = data.aws_eks_cluster_auth.micro-dev-eks-demo_auth.token
    config_path = "~/.kube/config"
 }
-
