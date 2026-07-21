@@ -8,24 +8,48 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      destroy:
+        description: 'Destroy all infrastructure instead of deploying'
+        required: false
+        default: 'false'
 
 env:
   AWS_REGION: eu-west-2
   CLUSTER_NAME: micro-dev-eks-demo
+  NODEGROUP_NAME: micro-dev-eks-ng-public
 
 jobs:
   deploy:
+    if: github.event.inputs.destroy != 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v6
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-region: eu-west-2
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Ensure Terraform state bucket exists
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          BUCKET="sockshop-tfstate-$ACCOUNT_ID"
+          echo "TF_STATE_BUCKET=$BUCKET" >> "$GITHUB_ENV"
+          if ! aws s3api head-bucket --bucket "$BUCKET" 2>/dev/null; then
+            aws s3api create-bucket \
+              --bucket "$BUCKET" \
+              --region "$AWS_REGION" \
+              --create-bucket-configuration LocationConstraint="$AWS_REGION"
+            aws s3api put-bucket-versioning \
+              --bucket "$BUCKET" \
+              --versioning-configuration Status=Enabled
+          else
+            echo "Bucket $BUCKET already exists, skipping creation"
+          fi
 
       - name: Install eksctl
         run: |
@@ -34,19 +58,20 @@ jobs:
 
       - name: Ensure EKS cluster exists
         run: |
-          if ! aws eks describe-cluster --name $CLUSTER_NAME --region $AWS_REGION >/dev/null 2>&1; then
+          if ! aws eks describe-cluster --name "$CLUSTER_NAME" --region "$AWS_REGION" >/dev/null 2>&1; then
             eksctl create cluster \
-              --name $CLUSTER_NAME \
-              --region $AWS_REGION \
-              --nodegroup-name micro-dev-eks-ng-public \
+              --name "$CLUSTER_NAME" \
+              --region "$AWS_REGION" \
+              --nodegroup-name "$NODEGROUP_NAME" \
               --node-type t2.medium \
-              --nodes 2
+              --nodes 2 \
+              --managed
           else
             echo "Cluster $CLUSTER_NAME already exists, skipping creation"
           fi
 
       - name: Update kubeconfig
-        run: aws eks update-kubeconfig --name $CLUSTER_NAME --region $AWS_REGION
+        run: aws eks update-kubeconfig --name "$CLUSTER_NAME" --region "$AWS_REGION"
 
       - name: Install kubectl
         uses: azure/setup-kubectl@v4
@@ -61,54 +86,107 @@ jobs:
       - name: Deploy core microservices
         working-directory: kubernetes/micro-service
         run: |
-          terraform init
-          terraform apply -auto-approve
+          terraform init -input=false \
+            -backend-config="bucket=$TF_STATE_BUCKET" \
+            -backend-config="key=micro-service/terraform.tfstate" \
+            -backend-config="region=$AWS_REGION"
+          terraform apply -input=false -auto-approve
 
       - name: Deploy nginx ingress controller
         working-directory: kubernetes/nginx-controller
         run: |
-          terraform init
-          terraform apply -auto-approve
+          terraform init -input=false \
+            -backend-config="bucket=$TF_STATE_BUCKET" \
+            -backend-config="key=nginx-controller/terraform.tfstate" \
+            -backend-config="region=$AWS_REGION"
+          terraform apply -input=false -auto-approve
 
       - name: Deploy Prometheus monitoring stack
         working-directory: kubernetes/prometheus-helm
         run: |
-          terraform init
-          terraform apply -auto-approve
+          terraform init -input=false \
+            -backend-config="bucket=$TF_STATE_BUCKET" \
+            -backend-config="key=prometheus-helm/terraform.tfstate" \
+            -backend-config="region=$AWS_REGION"
+          terraform apply -input=false -auto-approve
 
       - name: Deploy ingress rules
         working-directory: kubernetes/ingress-rule
         run: |
-          terraform init
-          terraform apply -auto-approve
+          terraform init -input=false \
+            -backend-config="bucket=$TF_STATE_BUCKET" \
+            -backend-config="key=ingress-rule/terraform.tfstate" \
+            -backend-config="region=$AWS_REGION"
+          terraform apply -input=false -auto-approve
 
       - name: Verify deployment
         run: |
           kubectl get svc -n sock-shop
           kubectl get svc -n prometheus
 
-          
-      - name: Ensure Terraform state bucket exists
+  destroy:
+    if: github.event.inputs.destroy == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Resolve Terraform state bucket
         run: |
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-          BUCKET="sockshop-tfstate-$ACCOUNT_ID"
-          echo "TF_STATE_BUCKET=$BUCKET" >> $GITHUB_ENV
-          if ! aws s3api head-bucket --bucket "$BUCKET" 2>/dev/null; then
-            aws s3api create-bucket \
-              --bucket "$BUCKET" \
-              --region $AWS_REGION \
-              --create-bucket-configuration LocationConstraint=$AWS_REGION
-            aws s3api put-bucket-versioning \
-              --bucket "$BUCKET" \
-              --versioning-configuration Status=Enabled
-          fi
+          echo "TF_STATE_BUCKET=sockshop-tfstate-$ACCOUNT_ID" >> "$GITHUB_ENV"
 
-      - name: Deploy core microservices
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name "$CLUSTER_NAME" --region "$AWS_REGION"
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.7.5
+
+      - name: Destroy ingress rules
+        working-directory: kubernetes/ingress-rule
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=$TF_STATE_BUCKET" \
+            -backend-config="key=ingress-rule/terraform.tfstate" \
+            -backend-config="region=$AWS_REGION"
+          terraform destroy -input=false -auto-approve
+
+      - name: Destroy Prometheus monitoring stack
+        working-directory: kubernetes/prometheus-helm
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=$TF_STATE_BUCKET" \
+            -backend-config="key=prometheus-helm/terraform.tfstate" \
+            -backend-config="region=$AWS_REGION"
+          terraform destroy -input=false -auto-approve
+
+      - name: Destroy nginx ingress controller
+        working-directory: kubernetes/nginx-controller
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=$TF_STATE_BUCKET" \
+            -backend-config="key=nginx-controller/terraform.tfstate" \
+            -backend-config="region=$AWS_REGION"
+          terraform destroy -input=false -auto-approve
+
+      - name: Destroy core microservices
         working-directory: kubernetes/micro-service
         run: |
-          terraform init \
-            -input=false \
+          terraform init -input=false \
             -backend-config="bucket=$TF_STATE_BUCKET" \
             -backend-config="key=micro-service/terraform.tfstate" \
             -backend-config="region=$AWS_REGION"
-          terraform apply -input=false -auto-approve
+          terraform destroy -input=false -auto-approve
+
+      - name: Delete EKS cluster
+        run: eksctl delete cluster --name "$CLUSTER_NAME" --region "$AWS_REGION"
+        
