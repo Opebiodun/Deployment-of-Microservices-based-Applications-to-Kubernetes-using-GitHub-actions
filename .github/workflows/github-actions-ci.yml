@@ -90,6 +90,14 @@ jobs:
             -backend-config="bucket=$TF_STATE_BUCKET" \
             -backend-config="key=micro-service/terraform.tfstate" \
             -backend-config="region=$AWS_REGION"
+
+          if ! terraform state list 2>/dev/null | grep -qx 'kubernetes_namespace.kube-namespace'; then
+            if kubectl get namespace sock-shop >/dev/null 2>&1; then
+              echo "Namespace sock-shop already exists but isn't in state — importing"
+              terraform import kubernetes_namespace.kube-namespace sock-shop
+            fi
+          fi
+
           terraform apply -input=false -auto-approve
 
       - name: Deploy nginx ingress controller
@@ -99,6 +107,14 @@ jobs:
             -backend-config="bucket=$TF_STATE_BUCKET" \
             -backend-config="key=nginx-controller/terraform.tfstate" \
             -backend-config="region=$AWS_REGION"
+
+          if ! terraform state list 2>/dev/null | grep -qx 'kubernetes_namespace.nginx-namespace'; then
+            if kubectl get namespace nginx-ingress >/dev/null 2>&1; then
+              echo "Namespace nginx-ingress already exists but isn't in state — importing"
+              terraform import kubernetes_namespace.nginx-namespace nginx-ingress
+            fi
+          fi
+
           terraform apply -input=false -auto-approve
 
       - name: Deploy Prometheus monitoring stack
@@ -108,6 +124,14 @@ jobs:
             -backend-config="bucket=$TF_STATE_BUCKET" \
             -backend-config="key=prometheus-helm/terraform.tfstate" \
             -backend-config="region=$AWS_REGION"
+
+          if ! terraform state list 2>/dev/null | grep -qx 'kubernetes_namespace.kube-namespace'; then
+            if kubectl get namespace prometheus >/dev/null 2>&1; then
+              echo "Namespace prometheus already exists but isn't in state — importing"
+              terraform import kubernetes_namespace.kube-namespace prometheus
+            fi
+          fi
+
           terraform apply -input=false -auto-approve
 
       - name: Deploy ingress rules
@@ -189,4 +213,3 @@ jobs:
 
       - name: Delete EKS cluster
         run: eksctl delete cluster --name "$CLUSTER_NAME" --region "$AWS_REGION"
-        

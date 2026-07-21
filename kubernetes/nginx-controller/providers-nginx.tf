@@ -37,7 +37,7 @@ provider "helm" {
        #host                   = data.aws_eks_cluster.micro-dev-eks-demo.endpoint
       # cluster_ca_certificate = base64decode(data.aws_eks_cluster.micro-dev-eks-demo.certificate_authority[0].data)
        #token                  = data.aws_eks_cluster_auth.micro-dev-eks-demo_auth.token
-      config_path = "~/.kube/config"
+       config_path = "~/.kube/config"
     }
 }
 
@@ -54,7 +54,7 @@ provider "kubectl" {
    host                   = data.aws_eks_cluster.micro-dev-eks-demo.endpoint
    cluster_ca_certificate = base64decode(data.aws_eks_cluster.micro-dev-eks-demo.certificate_authority[0].data)
    token                  = data.aws_eks_cluster_auth.micro-dev-eks-demo_auth.token
-    config_path = "~/.kube/config"
+   config_path = "~/.kube/config"
 }
 
 
